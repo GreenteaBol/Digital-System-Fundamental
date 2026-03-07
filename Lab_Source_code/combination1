@@ -1,0 +1,75 @@
+----------------------------------------------------------------------------------
+-- Company: 
+-- Engineer: 
+-- 
+-- Create Date: 02/15/2026 11:19:05 PM
+-- Design Name: 
+-- Module Name: combination1 - Behavioral
+-- Project Name: 
+-- Target Devices: 
+-- Tool Versions: 
+-- Description: 
+-- 
+-- Dependencies: 
+-- 
+-- Revision:
+-- Revision 0.01 - File Created
+-- Additional Comments:
+-- 
+----------------------------------------------------------------------------------
+
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+-- Uncomment the following library declaration if using
+-- arithmetic functions with Signed or Unsigned values
+--use IEEE.NUMERIC_STD.ALL;
+
+-- Uncomment the following library declaration if instantiating
+-- any Xilinx leaf cells in this code.
+--library UNISIM;
+--use UNISIM.VComponents.all;
+
+entity combination1 is
+    Port ( D : in STD_LOGIC_VECTOR (7 downto 0);
+           sseg_sel : in STD_LOGIC_VECTOR (3 downto 0);
+           sseg : out STD_LOGIC_VECTOR (6 downto 0);
+           sseg_en : out STD_LOGIC_VECTOR (3 downto 0);
+           led : out STD_LOGIC_VECTOR (3 downto 0));
+end combination1;
+
+architecture dataflow of combination1 is
+    component encoder8to3
+        Port ( D : in  STD_LOGIC_VECTOR (7 downto 0);
+               O : out STD_LOGIC_VECTOR (2 downto 0));
+    end component;
+
+    component sseg_decoder
+        Port ( bin      : in  STD_LOGIC_VECTOR (3 downto 0);
+               sseg_sel : in  STD_LOGIC_VECTOR (3 downto 0);
+               sseg     : out STD_LOGIC_VECTOR (6 downto 0);
+               sseg_en  : out STD_LOGIC_VECTOR (3 downto 0));
+    end component;
+
+    signal enc_out : STD_LOGIC_VECTOR (2 downto 0);
+    signal bin_in  : STD_LOGIC_VECTOR (3 downto 0);
+begin
+    -- Encoder
+    U1: encoder8to3 port map (D, enc_out);
+
+    -- Extend to 4-bit
+    bin_in <= '0' & enc_out;
+
+    -- Seven segment decoder
+    U2: sseg_decoder port map (
+        bin => bin_in,
+        sseg_sel => sseg_sel,
+        sseg => sseg,
+        sseg_en => sseg_en
+    );
+
+    -- Show value on LEDs
+    led <= bin_in;
+
+end dataflow;
