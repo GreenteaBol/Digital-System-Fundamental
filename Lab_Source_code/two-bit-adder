@@ -1,0 +1,50 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity two_bit_adder is
+    port (
+        a    : in std_logic_vector(1 downto 0);
+        b    : in std_logic_vector(1 downto 0);
+        cin  : in std_logic;
+        sum  : out std_logic_vector(1 downto 0);
+        cout : out std_logic  -- ชื่อที่ประกาศไว้คือ cout
+    );
+end entity two_bit_adder;
+
+architecture dataflow of two_bit_adder is
+
+    component full_adder
+        port (
+            a    : in  std_logic;
+            b    : in  std_logic;
+            cin  : in  std_logic;
+            sum  : out std_logic;
+            cout : out std_logic
+        );
+    end component;
+
+    signal c0 : std_logic;
+
+begin
+
+    -- LSB (บิตที่ 0)
+    fa0: full_adder
+        port map (
+            a    => a(0),
+            b    => b(0),
+            cin  => cin,    -- เปลี่ยนจาก '0' เป็น cin เพื่อรับค่าจากภายนอก
+            sum  => sum(0),
+            cout => c0
+        );
+
+    -- MSB (บิตที่ 1)
+    fa1: full_adder
+        port map (
+            a    => a(1),
+            b    => b(1),
+            cin  => c0,
+            sum  => sum(1),
+            cout => cout   -- แก้จาก carry เป็น cout ให้ตรงกับ Port ด้านบน
+        );
+
+end dataflow;
