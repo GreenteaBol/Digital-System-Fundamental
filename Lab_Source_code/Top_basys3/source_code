@@ -1,0 +1,96 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity Top_Basys3 is
+    port (
+        clk      : in  std_logic;
+        reset    : in  std_logic;
+
+        led      : out std_logic_vector(2 downto 0);
+
+        sseg     : out std_logic_vector(6 downto 0);
+        sseg_en  : out std_logic_vector(3 downto 0)
+    );
+end Top_Basys3;
+
+architecture Structural of Top_Basys3 is
+
+    -------------------------------------------------
+    -- Components
+    -------------------------------------------------
+
+    component Clock_Divider
+        port (
+            clk     : in  std_logic;
+            reset   : in  std_logic;
+            clk_out : out std_logic
+        );
+    end component;
+
+    component counter_3bit
+        port (
+            clk   : in  std_logic;
+            reset : in  std_logic;
+            Q     : out std_logic_vector(2 downto 0)
+        );
+    end component;
+
+    component sseg_decoder_df
+        port (
+            bin      : in  std_logic_vector(3 downto 0);
+            sseg_sel : in  std_logic_vector(3 downto 0);
+            sseg     : out std_logic_vector(6 downto 0);
+            sseg_en  : out std_logic_vector(3 downto 0)
+        );
+    end component;
+
+    -------------------------------------------------
+    -- Internal Signals
+    -------------------------------------------------
+
+    signal slow_clk   : std_logic;
+    signal count_out  : std_logic_vector(2 downto 0);
+    signal bin_4bit   : std_logic_vector(3 downto 0);
+
+begin
+
+    -------------------------------------------------
+    -- Clock Divider
+    -------------------------------------------------
+    U1: Clock_Divider
+        port map (
+            clk     => clk,
+            reset   => reset,
+            clk_out => slow_clk
+        );
+
+    -------------------------------------------------
+    -- 3-bit Counter
+    -------------------------------------------------
+    U2: counter_3bit
+        port map (
+            clk   => slow_clk,
+            reset => reset,
+            Q     => count_out
+        );
+
+    led <= count_out;
+
+    -------------------------------------------------
+    -- Convert 3-bit to 4-bit
+    -------------------------------------------------
+    bin_4bit <= '0' & count_out;
+
+    -------------------------------------------------
+    -- 7-Segment Decoder
+    -- เปิด digit ขวาสุดตัวเดียว (active low)
+    -------------------------------------------------
+    U3: sseg_decoder_df
+        port map (
+            bin      => bin_4bit,
+            sseg_sel => "1110",   -- enable digit 0 only
+            sseg     => sseg,
+            sseg_en  => sseg_en
+        );
+
+end Structural;
