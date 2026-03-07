@@ -1,0 +1,54 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity counter_3bit is
+    port (
+        clk   : in  std_logic;
+        reset : in  std_logic;
+        Q     : out std_logic_vector(2 downto 0)
+    );
+end counter_3bit;
+
+architecture Structural of counter_3bit is
+
+    component JK_FF
+        port (
+            clk, J, K, reset : in std_logic;
+            Q : out std_logic
+        );
+    end component;
+
+    signal q_internal : std_logic_vector(2 downto 0);
+    signal and_01     : std_logic;
+
+begin
+
+    and_01 <= q_internal(0) and q_internal(1);
+
+    FF0: JK_FF port map(
+        clk   => clk,
+        reset => reset,
+        J     => '1',
+        K     => '1',
+        Q     => q_internal(0)
+    );
+
+    FF1: JK_FF port map(
+        clk   => clk,
+        reset => reset,
+        J     => q_internal(0),
+        K     => q_internal(0),
+        Q     => q_internal(1)
+    );
+
+    FF2: JK_FF port map(
+        clk   => clk,
+        reset => reset,
+        J     => and_01,
+        K     => and_01,
+        Q     => q_internal(2)
+    );
+
+    Q <= q_internal;
+
+end Structural;
