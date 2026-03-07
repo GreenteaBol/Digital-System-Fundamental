@@ -1,0 +1,33 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity sseg_decoder_df is
+    Port ( bin : in STD_LOGIC_VECTOR (3 downto 0);
+           sseg_sel : in STD_LOGIC_VECTOR (3 downto 0);
+           sseg : out STD_LOGIC_VECTOR (6 downto 0);
+           sseg_en : out STD_LOGIC_VECTOR (3 downto 0));
+end sseg_decoder_df;
+
+architecture Dataflow of sseg_decoder_df is
+begin
+
+    sseg_en <= sseg_sel;
+
+    sseg <= "0000001" when bin = "0000" else -- 0
+            "1001111" when bin = "0001" else -- 1
+            "0010010" when bin = "0010" else -- 2
+            "0000110" when bin = "0011" else -- 3
+            "1001100" when bin = "0100" else -- 4
+            "0100100" when bin = "0101" else -- 5
+            "0100000" when bin = "0110" else -- 6
+            "0001111" when bin = "0111" else -- 7
+            "0000000" when bin = "1000" else -- 8
+            "0000100" when bin = "1001" else -- 9
+            "0000010" when bin = "1010" else -- A
+            "1100000" when bin = "1011" else -- b
+            "0110001" when bin = "1100" else -- C
+            "1000010" when bin = "1101" else -- d
+            "0110000" when bin = "1110" else -- E
+            "0111000";                      -- F
+
+end Dataflow;
