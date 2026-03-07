@@ -1,0 +1,40 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity Clock_Divider is
+    port (
+        clk     : in std_logic;
+        reset   : in std_logic;
+        clk_out : out std_logic
+    );
+end Clock_Divider;
+
+architecture Structural of Clock_Divider is
+
+component DFF
+    port(
+        Q     : out std_logic;
+        clk   : in std_logic;
+        reset : in std_logic;
+        D     : in std_logic
+    );
+end component;
+
+signal q : std_logic_vector(26 downto 0);
+
+begin
+
+FF0: DFF port map(q(0), clk, reset, not q(0));
+FF1: DFF port map(q(1), q(0), reset, not q(1));
+FF2: DFF port map(q(2), q(1), reset, not q(2));
+FF3: DFF port map(q(3), q(2), reset, not q(3));
+FF4: DFF port map(q(4), q(3), reset, not q(4));
+FF5: DFF port map(q(5), q(4), reset, not q(5));
+FF6: DFF port map(q(6), q(5), reset, not q(6));
+FF7: DFF port map(q(7), q(6), reset, not q(7));
+FF8: DFF port map(q(8), q(7), reset, not q(8));
+FF9: DFF port map(q(9), q(8), reset, not q(9));
+
+clk_out <= q(26);
+
+end Structural;
