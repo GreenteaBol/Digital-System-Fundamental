@@ -1,0 +1,27 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
+
+entity Clock_Divider is
+    port (
+        clk     : in  std_logic;
+        reset   : in  std_logic;
+        clk_out : out std_logic
+    );
+end Clock_Divider;
+
+architecture Structural of Clock_Divider is
+    signal count : std_logic_vector(25 downto 0) := (others => '0');
+begin
+    -- Simple counter logic (standard for Basys3 timing)
+    process(clk, reset)
+    begin
+        if reset = '1' then
+            count <= (others => '0');
+        elsif rising_edge(clk) then
+            count <= count + 1;
+        end if;
+    end process;
+    
+    clk_out <= count(25); -- Approx 1.5Hz
+end Structural;
