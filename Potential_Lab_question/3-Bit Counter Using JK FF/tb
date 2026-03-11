@@ -1,0 +1,35 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity counter3_tb is
+end;
+
+architecture sim of counter3_tb is
+
+component counter3
+port(
+    clk   : in std_logic;
+    reset : in std_logic;
+    Q     : out std_logic_vector(2 downto 0)
+);
+end component;
+
+signal clk   : std_logic := '0';
+signal reset : std_logic := '1';
+signal Q     : std_logic_vector(2 downto 0);
+
+begin
+
+UUT: counter3 port map(clk, reset, Q);
+
+clk <= not clk after 10 ns;
+
+process
+begin
+    wait for 20 ns;
+    reset <= '0';
+    wait for 200 ns;
+    wait;
+end process;
+
+end sim;
