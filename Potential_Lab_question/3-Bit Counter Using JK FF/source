@@ -1,0 +1,56 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity counter3 is
+    port(
+        clk   : in std_logic;
+        reset : in std_logic;
+        Q     : out std_logic_vector(2 downto 0)
+    );
+end counter3;
+architecture structural of counter3 is
+
+component JK_FF
+    port(
+        clk, J, K, reset : in std_logic;
+        Q : out std_logic
+    );
+end component;
+
+signal q_int : std_logic_vector(2 downto 0);
+
+begin
+
+Q <= q_int;
+
+-- LSB flip-flop (toggle every clock)
+FF0: JK_FF
+port map(
+    clk => clk,
+    J => '1',
+    K => '1',
+    reset => reset,
+    Q => q_int(0)
+);
+
+-- Second bit
+FF1: JK_FF
+port map(
+    clk => clk,
+    J => q_int(0),
+    K => q_int(0),
+    reset => reset,
+    Q => q_int(1)
+);
+
+-- MSB
+FF2: JK_FF
+port map(
+    clk => clk,
+    J => q_int(0) and q_int(1),
+    K => q_int(0) and q_int(1),
+    reset => reset,
+    Q => q_int(2)
+);
+
+end structural;
