@@ -1,0 +1,32 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+
+entity JK_FF is
+    port(
+        clk, J, K, reset : in std_logic;
+        Q : out std_logic
+    );
+end JK_FF;
+
+architecture dataflow of JK_FF is
+
+signal q_int  : std_logic := '0';
+signal q_next : std_logic;
+
+begin
+
+-- Dataflow equation of JK FF
+q_next <= (J and not q_int) or (not K and q_int);
+
+process(clk, reset)
+begin
+    if reset='1' then
+        q_int <= '0';
+    elsif rising_edge(clk) then
+        q_int <= q_next;
+    end if;
+end process;
+
+Q <= q_int;
+
+end dataflow;
