@@ -1,0 +1,334 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity Top_Safe is
+    Port (
+        clk         : in  STD_LOGIC;
+        btnR        : in  STD_LOGIC;
+        btnC        : in  STD_LOGIC;
+        Row_A       : in  STD_LOGIC_VECTOR (3 downto 0);
+        Row_B       : in  STD_LOGIC_VECTOR (3 downto 0);
+        Col_A       : out STD_LOGIC_VECTOR (3 downto 0);
+        Col_B       : out STD_LOGIC_VECTOR (3 downto 0);
+        seg         : out STD_LOGIC_VECTOR (6 downto 0);
+        an          : out STD_LOGIC_VECTOR (3 downto 0);
+        led_success : out STD_LOGIC;
+        led_fail    : out STD_LOGIC;
+        uart_rx_in  : in  STD_LOGIC;
+        uart_tx_out : out STD_LOGIC
+    );
+end Top_Safe;
+
+architecture Behavioral of Top_Safe is
+
+    type state_type is (ST_SET1, ST_SET2, ST_CHK1, ST_CHK2, ST_LOCKED);
+    signal state : state_type := ST_SET1;
+
+    signal save_P1, save_P2   : unsigned(15 downto 0) := x"FFFF";
+    signal current_entry      : unsigned(15 downto 0) := x"0000";
+    signal count              : integer range 0 to 4 := 0;
+    signal attempts           : integer range 0 to 3 := 0;
+
+    signal chk1_ok            : std_logic := '0';
+
+    signal led_fail_i         : std_logic := '0';
+    signal led_success_i      : std_logic := '0';
+
+    signal val_A, val_B       : STD_LOGIC_VECTOR(3 downto 0);
+    signal kp_A, kp_B         : STD_LOGIC;
+    signal last_kp_A          : STD_LOGIC := '0';
+    signal last_kp_B          : STD_LOGIC := '0';
+    signal last_R             : STD_LOGIC := '0';
+    signal last_C             : STD_LOGIC := '0';
+
+    signal slow_clk           : STD_LOGIC;
+    signal hex_val            : STD_LOGIC_VECTOR(3 downto 0);
+
+    signal debounce_timer     : unsigned(27 downto 0) := (others => '0');
+    signal keypad_ready       : std_logic := '1';
+    signal fail_timer         : unsigned(27 downto 0) := (others => '0');
+
+    constant BIT_TMR_MAX : integer := 10416;
+    signal bit_timer     : integer range 0 to BIT_TMR_MAX := 0;
+    signal bit_cnt       : integer range 0 to 9 := 0;
+    signal tx_buffer     : std_logic_vector(9 downto 0) := (others => '1');
+    signal tx_active     : std_logic := '0';
+
+    signal rx_sync1      : std_logic := '1';
+    signal rx_sync2      : std_logic := '1';
+    signal last_rx       : std_logic := '1';
+    signal confirm_pulse : std_logic := '0';
+
+begin
+
+    led_fail <= led_fail_i;
+    led_success <= led_success_i;
+
+    C1: entity work.Clock_Divider
+        port map(
+            clk     => clk,
+            reset   => '0',
+            clk_out => slow_clk
+        );
+
+    KA: entity work.Keypad_Decoder
+        port map(
+            clk        => clk,
+            Row        => Row_A,
+            Col        => Col_A,
+            DecodeOut  => val_A,
+            KeyPressed => kp_A
+        );
+
+    KB: entity work.Keypad_Decoder
+        port map(
+            clk        => clk,
+            Row        => Row_B,
+            Col        => Col_B,
+            DecodeOut  => val_B,
+            KeyPressed => kp_B
+        );
+
+    process(clk)
+    begin
+        if rising_edge(clk) then
+
+            -- UART RX sync
+            rx_sync1 <= uart_rx_in;
+            rx_sync2 <= rx_sync1;
+            confirm_pulse <= '0';
+
+            if last_rx = '1' and rx_sync2 = '0' then
+                confirm_pulse <= '1';
+            end if;
+            last_rx <= rx_sync2;
+
+            -- UART TX
+            if tx_active = '1' then
+                if bit_timer = BIT_TMR_MAX then
+                    bit_timer <= 0;
+                    if bit_cnt = 9 then
+                        tx_active <= '0';
+                        bit_cnt <= 0;
+                    else
+                        bit_cnt <= bit_cnt + 1;
+                    end if;
+                else
+                    bit_timer <= bit_timer + 1;
+                end if;
+                uart_tx_out <= tx_buffer(bit_cnt);
+            else
+                uart_tx_out <= '1';
+            end if;
+
+            -- Master Reset
+            if btnR = '1' and last_R = '0' then
+                state         <= ST_SET1;
+                save_P1       <= x"FFFF";
+                save_P2       <= x"FFFF";
+                current_entry <= x"0000";
+                count         <= 0;
+                attempts      <= 0;
+                chk1_ok       <= '0';
+                led_success_i <= '0';
+                led_fail_i    <= '0';
+
+                if tx_active = '0' then
+                    tx_buffer <= '1' & x"52" & '0'; -- 'R'
+                    tx_active <= '1';
+                end if;
+
+            -- Soft Reset button on Basys3 only
+            elsif btnC = '1' and last_C = '0' then
+                case state is
+                    when ST_SET1 =>
+                        current_entry <= x"0000";
+                        count <= 0;
+
+                    when ST_SET2 =>
+                        current_entry <= x"0000";
+                        count <= 0;
+
+                    when ST_CHK1 =>
+                        current_entry <= x"0000";
+                        count <= 0;
+
+                    when ST_CHK2 =>
+                        current_entry <= x"0000";
+                        count <= 0;
+                        state <= ST_CHK1;
+                        chk1_ok <= '0';
+
+                    when others =>
+                        null;
+                end case;
+
+                if tx_active = '0' then
+                    tx_buffer <= '1' & x"43" & '0'; -- 'C'
+                    tx_active <= '1';
+                end if;
+
+            -- Confirm from ESP
+            elsif confirm_pulse = '1' and count = 4 then
+                case state is
+
+                    when ST_SET1 =>
+                        save_P1 <= current_entry;
+                        state <= ST_SET2;
+                        current_entry <= x"0000";
+                        count <= 0;
+
+                        if tx_active = '0' then
+                            tx_buffer <= '1' & x"4E" & '0'; -- 'N'
+                            tx_active <= '1';
+                        end if;
+
+                    when ST_SET2 =>
+                        save_P2 <= current_entry;
+                        state <= ST_CHK1;
+                        current_entry <= x"0000";
+                        count <= 0;
+
+                        if tx_active = '0' then
+                            tx_buffer <= '1' & x"4E" & '0';
+                            tx_active <= '1';
+                        end if;
+
+                    when ST_CHK1 =>
+                        if current_entry = save_P1 then
+                            chk1_ok <= '1';
+                        else
+                            chk1_ok <= '0';
+                        end if;
+
+                        state <= ST_CHK2;
+                        current_entry <= x"0000";
+                        count <= 0;
+
+                        if tx_active = '0' then
+                            tx_buffer <= '1' & x"4E" & '0';
+                            tx_active <= '1';
+                        end if;
+
+                    when ST_CHK2 =>
+                        if (chk1_ok = '1') and (current_entry = save_P2) then
+                            led_success_i <= '1';
+
+                            if tx_active = '0' then
+                                tx_buffer <= '1' & x"4F" & '0'; -- 'O'
+                                tx_active <= '1';
+                            end if;
+                        else
+                            attempts <= attempts + 1;
+                            led_fail_i <= '1';
+                            state <= ST_CHK1;
+
+                            if tx_active = '0' then
+                                tx_buffer <= '1' & x"46" & '0'; -- 'F'
+                                tx_active <= '1';
+                            end if;
+                        end if;
+
+                        current_entry <= x"0000";
+                        count <= 0;
+                        chk1_ok <= '0';
+
+                    when others =>
+                        null;
+                end case;
+            end if;
+
+            -- Fail LED timer
+            if led_fail_i = '1' then
+                if fail_timer < 200000000 then
+                    fail_timer <= fail_timer + 1;
+                else
+                    led_fail_i <= '0';
+                    fail_timer <= (others => '0');
+                end if;
+            end if;
+
+            -- Keypad input (digits 0-9 only)
+            if keypad_ready = '0' then
+                if debounce_timer < 35000000 then
+                    debounce_timer <= debounce_timer + 1;
+                else
+                    keypad_ready <= '1';
+                    debounce_timer <= (others => '0');
+                end if;
+
+            elsif tx_active = '0' and state /= ST_LOCKED then
+
+                if count < 4 then
+
+                    -- Keypad A for Password 1 / Check 1
+                    if (state = ST_SET1 or state = ST_CHK1) and
+                       kp_A = '1' and last_kp_A = '0' and val_A < x"A" then
+
+                        current_entry <= current_entry(11 downto 0) & unsigned(val_A);
+                        tx_buffer <= '1' & "0011" & val_A & '0';
+                        tx_active <= '1';
+                        count <= count + 1;
+                        keypad_ready <= '0';
+
+                    -- Keypad B for Password 2 / Check 2
+                    elsif (state = ST_SET2 or state = ST_CHK2) and
+                          kp_B = '1' and last_kp_B = '0' and val_B < x"A" then
+
+                        current_entry <= current_entry(11 downto 0) & unsigned(val_B);
+                        tx_buffer <= '1' & "0011" & val_B & '0';
+                        tx_active <= '1';
+                        count <= count + 1;
+                        keypad_ready <= '0';
+                    end if;
+                end if;
+            end if;
+
+            if attempts >= 3 then
+                state <= ST_LOCKED;
+            end if;
+
+            last_kp_A <= kp_A;
+            last_kp_B <= kp_B;
+            last_R <= btnR;
+            last_C <= btnC;
+        end if;
+    end process;
+
+    process(slow_clk)
+        variable refresh : unsigned(1 downto 0) := "00";
+    begin
+        if rising_edge(slow_clk) then
+            refresh := refresh + 1;
+
+            if state = ST_LOCKED then
+                an <= "1111";
+            else
+                case refresh is
+                    when "00" =>
+                        an <= "0111";
+                        hex_val <= std_logic_vector(current_entry(15 downto 12));
+                    when "01" =>
+                        an <= "1011";
+                        hex_val <= std_logic_vector(current_entry(11 downto 8));
+                    when "10" =>
+                        an <= "1101";
+                        hex_val <= std_logic_vector(current_entry(7 downto 4));
+                    when others =>
+                        an <= "1110";
+                        hex_val <= std_logic_vector(current_entry(3 downto 0));
+                end case;
+            end if;
+        end if;
+    end process;
+
+    C3: entity work.sseg_decoder_df
+        port map(
+            bin      => hex_val,
+            sseg     => seg,
+            an_ctrl  => "0000",
+            sseg_en  => open
+        );
+
+end Behavioral;
