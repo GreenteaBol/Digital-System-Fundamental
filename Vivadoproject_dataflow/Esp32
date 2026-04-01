@@ -1,0 +1,222 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <ESP32Servo.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+Servo myServo;
+
+// ===== Pins =====
+const int confirmBtn    = 4;
+const int masterResetBtn = 26;   // NEW
+const int softResetBtn   = 27;   // NEW
+
+const int servoPin   = 18;
+const int LED_YELLOW = 14;
+const int LED_RED    = 12;
+const int BUZZER_PIN = 13;
+
+// ===== Variables =====
+String tempPass = "";
+int attempts = 0;
+
+// 0=Set1, 1=Set2, 2=Chk1, 3=Chk2, 4=Locked, 5=Open
+int sysState = 0;
+
+// button states
+bool lastConfirmState = HIGH;
+bool lastMasterResetState = HIGH;
+bool lastSoftResetState = HIGH;
+
+void updateLCD() {
+  lcd.clear();
+
+  if (sysState == 0) {
+    lcd.print("Set Password 1");
+    lcd.setCursor(0, 1);
+    lcd.print("Typed:" + tempPass);
+  }
+  else if (sysState == 1) {
+    lcd.print("Set Password 2");
+    lcd.setCursor(0, 1);
+    lcd.print("Typed:" + tempPass);
+  }
+  else if (sysState == 2) {
+    lcd.print("Enter P1");
+    lcd.setCursor(12, 0);
+    lcd.print("A:");
+    lcd.print(3 - attempts);
+    lcd.setCursor(0, 1);
+    lcd.print("Typed:" + tempPass);
+  }
+  else if (sysState == 3) {
+    lcd.print("Enter P2");
+    lcd.setCursor(12, 0);
+    lcd.print("A:");
+    lcd.print(3 - attempts);
+    lcd.setCursor(0, 1);
+    lcd.print("Typed:" + tempPass);
+  }
+  else if (sysState == 4) {
+    lcd.print("LOCKED");
+    lcd.setCursor(0, 1);
+    lcd.print("0 ATTEMPTS");
+  }
+  else if (sysState == 5) {
+    lcd.print("ACCESS GRANTED");
+    lcd.setCursor(0, 1);
+    lcd.print("SAFE OPEN");
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  Serial2.begin(9600, SERIAL_8N1, 16, 17); // RX=16, TX=17
+
+  myServo.setPeriodHertz(50);
+  myServo.attach(servoPin, 500, 2400);
+  myServo.write(0); // locked
+
+  pinMode(confirmBtn, INPUT_PULLUP);
+  pinMode(masterResetBtn, INPUT_PULLUP); // NEW
+  pinMode(softResetBtn, INPUT_PULLUP);   // NEW
+
+  pinMode(LED_YELLOW, OUTPUT);
+  pinMode(LED_RED, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+
+  digitalWrite(LED_YELLOW, LOW);
+  digitalWrite(LED_RED, LOW);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  lcd.init();
+  lcd.backlight();
+
+  updateLCD();
+}
+
+void loop() {
+  // ===== LOCK buzzer =====
+  if (sysState == 4) {
+    digitalWrite(BUZZER_PIN, HIGH);
+  }
+
+  // ===== Receive data from Basys3 =====
+  if (Serial2.available()) {
+    char c = Serial2.read();
+
+    if (c == 'R') {
+      sysState = 0;
+      attempts = 0;
+      tempPass = "";
+      myServo.write(0);
+
+      digitalWrite(LED_YELLOW, LOW);
+      digitalWrite(LED_RED, LOW);
+      digitalWrite(BUZZER_PIN, LOW);
+
+      updateLCD();
+    }
+    else if (c == 'C') {
+      tempPass = "";
+      if (sysState != 4) {
+        digitalWrite(BUZZER_PIN, LOW);
+      }
+      updateLCD();
+    }
+    else if (c == 'N') {
+      if (sysState < 3) {
+        sysState++;
+      }
+      tempPass = "";
+      if (sysState != 4) {
+        digitalWrite(BUZZER_PIN, LOW);
+      }
+      updateLCD();
+    }
+    else if (c == 'F') {
+      attempts++;
+      tempPass = "";
+
+      digitalWrite(LED_RED, HIGH);
+      digitalWrite(LED_YELLOW, LOW);
+
+      digitalWrite(BUZZER_PIN, HIGH);
+      delay(500);
+
+      if (attempts >= 3) {
+        sysState = 4;
+      } else {
+        digitalWrite(BUZZER_PIN, LOW);
+        sysState = 2;
+      }
+
+      updateLCD();
+
+      delay(1500);
+      digitalWrite(LED_RED, LOW);
+    }
+    else if (c == 'O') {
+      myServo.write(90);
+
+      digitalWrite(LED_YELLOW, HIGH);
+      digitalWrite(LED_RED, LOW);
+
+      for (int i = 0; i < 2; i++) {
+        digitalWrite(BUZZER_PIN, HIGH);
+        delay(200);
+        digitalWrite(BUZZER_PIN, LOW);
+        delay(150);
+      }
+
+      sysState = 5;
+      tempPass = "";
+      updateLCD();
+    }
+    else if (c >= '0' && c <= '9' && sysState != 4 && sysState != 5) {
+      if (tempPass.length() < 4) {
+        tempPass += c;
+        updateLCD();
+      }
+    }
+  }
+
+  // ===== Confirm button =====
+  bool confirmState = digitalRead(confirmBtn);
+  if (lastConfirmState == HIGH && confirmState == LOW) {
+    delay(20);
+    if (digitalRead(confirmBtn) == LOW) {
+      if (sysState != 4 && sysState != 5) {
+        if (tempPass.length() == 4) {
+          Serial2.write('S');
+        }
+      }
+      while (digitalRead(confirmBtn) == LOW) {}
+      delay(20);
+    }
+  }
+  lastConfirmState = confirmState;
+
+  // ===== Master Reset button on ESP32 =====
+  bool masterState = digitalRead(masterResetBtn);
+  if (lastMasterResetState == HIGH && masterState == LOW) {
+    delay(20);
+    if (digitalRead(masterResetBtn) == LOW) {
+      Serial2.write('R');   // send to Basys3
+      while (digitalRead(masterResetBtn) == LOW) {}
+      delay(20);
+    }
+  }
+  lastMasterResetState = masterState;
+
+  // ===== Soft Reset button on ESP32 =====
+  bool softState = digitalRead(softResetBtn);
+  if (lastSoftResetState == HIGH && softState == LOW) {
+    delay(20);
+    if (digitalRead(softResetBtn) == LOW) {
+      Serial2.write('C');   // send to Basys3
+      while (digitalRead(softResetBtn) == LOW) {}
+      delay(20);
+    }
+  }
+  lastSoftResetState = softState;
+}
