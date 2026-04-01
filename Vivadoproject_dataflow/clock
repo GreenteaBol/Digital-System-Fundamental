@@ -1,0 +1,32 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity Clock_Divider is
+    Port (
+        clk     : in  STD_LOGIC;
+        reset   : in  STD_LOGIC;
+        clk_out : out STD_LOGIC
+    );
+end Clock_Divider;
+
+architecture Behavioral of Clock_Divider is
+    signal count : integer := 0;
+    signal tmp   : std_logic := '0';
+begin
+    clk_out <= tmp;
+
+    process(clk, reset)
+    begin
+        if reset = '1' then
+            count <= 0;
+            tmp   <= '0';
+        elsif rising_edge(clk) then
+            count <= count + 1;
+            if count >= 99999 then
+                count <= 0;
+                tmp   <= not tmp;
+            end if;
+        end if;
+    end process;
+end Behavioral;
