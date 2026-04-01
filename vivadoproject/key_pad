@@ -1,0 +1,73 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity Keypad_Decoder is
+    Port (
+        clk         : in  STD_LOGIC;
+        Row         : in  STD_LOGIC_VECTOR (3 downto 0);
+        Col         : out STD_LOGIC_VECTOR (3 downto 0);
+        DecodeOut   : out STD_LOGIC_VECTOR (3 downto 0);
+        KeyPressed  : out STD_LOGIC
+    );
+end Keypad_Decoder;
+
+architecture Behavioral of Keypad_Decoder is
+    signal s_clk      : unsigned(19 downto 0) := (others => '0');
+    signal col_select : unsigned(1 downto 0);
+begin
+
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            s_clk <= s_clk + 1;
+        end if;
+    end process;
+
+    col_select <= s_clk(19 downto 18);
+
+    process(col_select, Row)
+    begin
+        Col <= "1111";
+        DecodeOut <= x"F";
+        KeyPressed <= '0';
+
+        case col_select is
+
+            -- Column 1 : 1,4,7,*
+            when "00" =>
+                Col <= "0111";
+                if    Row(0) = '0' then DecodeOut <= x"1"; KeyPressed <= '1';
+                elsif Row(1) = '0' then DecodeOut <= x"4"; KeyPressed <= '1';
+                elsif Row(2) = '0' then DecodeOut <= x"7"; KeyPressed <= '1';
+                -- Row(3) = '*' -> blocked
+                end if;
+
+            -- Column 2 : 3,6,9,#   <-- swapped here
+            when "01" =>
+                Col <= "1011";
+                if    Row(0) = '0' then DecodeOut <= x"3"; KeyPressed <= '1';
+                elsif Row(1) = '0' then DecodeOut <= x"6"; KeyPressed <= '1';
+                elsif Row(2) = '0' then DecodeOut <= x"9"; KeyPressed <= '1';
+                -- Row(3) = '#' -> blocked
+                end if;
+
+            -- Column 3 : 2,5,8,0   <-- swapped here
+            when "10" =>
+                Col <= "1101";
+                if    Row(0) = '0' then DecodeOut <= x"2"; KeyPressed <= '1';
+                elsif Row(1) = '0' then DecodeOut <= x"5"; KeyPressed <= '1';
+                elsif Row(2) = '0' then DecodeOut <= x"8"; KeyPressed <= '1';
+                elsif Row(3) = '0' then DecodeOut <= x"0"; KeyPressed <= '1';
+                end if;
+
+            -- Column 4 : A,B,C,D -> blocked
+            when others =>
+                Col <= "1110";
+                DecodeOut <= x"F";
+                KeyPressed <= '0';
+
+        end case;
+    end process;
+
+end Behavioral;
